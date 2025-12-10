@@ -173,68 +173,55 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
     post {
         cleanup {
             script {
+                def destroyInfra = false
+
                 if (currentBuild.currentResult == 'SUCCESS' && env.DEPLOY == 'Apply') {
-                    def destroyInfra = false
                     try {
-                        timeout(time: 5, unit: 'MINUTES') {
-                            input(
-                                id: 'post_destroy_confirm',
-                                message: "🎉 Deployment successful! Do you want to destroy the environment now?",
-                                ok: "Yes, Destroy Now"
-                            )
-                        }
+                        input(
+                            id: 'destroy_confirm',
+                            message: "🎉 Deployment successful! Destroy environment?",
+                            parameters: [
+                                [$class: 'BooleanParameterDefinition', 
+                                 defaultValue: false, 
+                                 description: 'Run terraform destroy?', 
+                                 name: 'confirm']
+                            ]
+                        )
                         destroyInfra = true
-                        echo "🗑️ POST-DEPLOY DESTROY APPROVED by ${env.RUNNER}"
+                        echo "🗑️ DESTROY APPROVED by ${env.RUNNER}"
                     } catch(err) {
                         destroyInfra = false
-                        echo "✅ Infrastructure remains deployed - timeout or declined"
-                    }
-
-                    if (destroyInfra) {
-                        echo "🧹 Proceeding with Infrastructure Cleanup..."
-                        withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
-                            try {
-                                sh """
-                                    set -e
-                                    cd ${TERRAFORM_DIR}
-                                    
-                                    echo "Cleaning up SSM parameters..."
-                                    aws ssm delete-parameter --name '/clixx/k8s-join-command' --region ${AWS_REGION} || true
-                                    
-                                    echo "Running terraform destroy..."
-                                    terraform destroy \
-                                      -var-file="\$TFVARS_FILE" \
-                                      -auto-approve
-                                """
-                                echo "✅ INFRASTRUCTURE DESTROYED SUCCESSFULLY"
-                            } catch (e) {
-                                echo "❌ DESTROY FAILED - Manual cleanup required"
-                            }
-                        }
+                        echo "✅ Infrastructure remains deployed"
                     }
                 } else if (currentBuild.currentResult == 'FAILURE') {
-                    echo "⚠️ PIPELINE FAILED - Review logs before manual cleanup"
+                    destroyInfra = true
+                    echo "⚠️ PIPELINE FAILED - Auto cleanup triggered"
+                }
+
+                if (destroyInfra) {
+                    echo "🧹 Proceeding with Infrastructure Cleanup..."
+                    withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
+                        try {
+                            sh """
+                                set -e
+                                cd ${TERRAFORM_DIR}
+                                
+                                echo "Cleaning up SSM parameters..."
+                                aws ssm delete-parameter --name '/clixx/k8s-join-command' --region ${AWS_REGION} 2>/dev/null || true
+                                
+                                echo "Running infrastructure destroy..."
+                                terraform destroy \
+                                  -var-file="\$TFVARS_FILE" \
+                                  -auto-approve
+                            """
+                            echo "✅ INFRASTRUCTURE DESTROYED SUCCESSFULLY"
+                        } catch (e) {
+                            echo "❌ DESTROY FAILED - Manual cleanup required"
+                            throw e
+                        }
+                    }
                 }
             }
-        }
-        
-        success {
-            echo """
-✅ PIPELINE COMPLETED SUCCESSFULLY
-User: ${env.RUNNER}
-Action: ${env.DEPLOY}
-Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]
-            """
-        }
-        
-        failure {
-            echo """
-❌ PIPELINE FAILED
-User: ${env.RUNNER}
-Action: ${env.DEPLOY}
-Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]
-Check the logs above for details.
-            """
         }
     }
 }

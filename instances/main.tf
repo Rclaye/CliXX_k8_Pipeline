@@ -186,6 +186,15 @@ resource "aws_security_group" "k8s_sg" {
     cidr_blocks = [var.vpc_cidr]
   }
 
+  # Add this new ingress rule for Grafana
+  ingress {
+    description = "Grafana NodePort from Internet"
+    from_port   = 31000
+    to_port     = 31000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]  # Restrict to your IP for security
+  }
+
   # Outbound to Internet (for downloading images/packages)
   egress {
     from_port   = 0

@@ -85,22 +85,6 @@ echo "=========================================="
 echo "PART 2: Joining Kubernetes Cluster"
 echo "=========================================="
 
-# Set hostname based on private IP last octet
-WORKER_IP=$(hostname -I | awk '{print $1}')
-LAST_OCTET=$(echo $WORKER_IP | cut -d. -f4)
-
-# Simple logic: if IP ends in 35 → worker1, if 33 → worker2
-if [ "$LAST_OCTET" -eq 35 ]; then
-    HOSTNAME="k8_Worker1"
-elif [ "$LAST_OCTET" -eq 33 ]; then
-    HOSTNAME="k8_Worker2"
-else
-    HOSTNAME="k8_Worker$LAST_OCTET"  # Fallback
-fi
-
-sudo hostnamectl set-hostname $HOSTNAME
-echo "$WORKER_IP $HOSTNAME" | sudo tee -a /etc/hosts
-
 # Wait for kubelet
 for i in {1..30}; do
     if systemctl is-active --quiet kubelet; then
@@ -135,5 +119,5 @@ fi
 sudo $JOIN_COMMAND
 
 echo "=========================================="
-echo "WORKER $HOSTNAME JOINED CLUSTER SUCCESSFULLY!"
+echo "WORKER JOINED CLUSTER SUCCESSFULLY!"
 echo "=========================================="

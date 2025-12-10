@@ -263,115 +263,26 @@ output "bastion_ssh_command" {
 }
 
 # ========================================
-# SSH COMMANDS
+# SSH ACCESS COMMANDS
 # ========================================
 
 output "ssh_to_master_via_bastion" {
   description = "Command to SSH to K8s Master via Bastion"
-  value       = "ssh -i ${var.private_instance_ssh_key_path} -J ubuntu@${aws_instance.bastion[0].public_ip} ubuntu@${aws_instance.k8s_master.private_ip}"
+  value       = "ssh -i ${var.private_instance_ssh_key_path} -o ProxyCommand=\"ssh -i ${var.bastion_ssh_key_path} -W %h:%p ubuntu@${aws_instance.bastion[0].public_ip}\" ubuntu@${aws_instance.k8s_master.private_ip}"
 }
 
-output "ssh_key_transfer_command" {
-  description = "Command to transfer the private key to the bastion via SCP"
-  value       = "scp -i ${var.bastion_ssh_key_path} ${var.private_instance_ssh_key_path} ubuntu@${aws_instance.bastion[0].public_ip}:~/.ssh/${var.private_instance_ssh_key_destination_filename_on_bastion}"
-}
-
-# ========================================
-# KUBERNETES SETUP INSTRUCTIONS
-# ========================================
-
-output "next_steps" {
-  description = "Manual steps to complete K8s setup based on your documentation"
-  value       = <<-EOT
-    
-    ============================================
-    POST-TERRAFORM KUBERNETES SETUP STEPS:
-    ============================================
-    
-    BASTION IP: ${aws_instance.bastion[0].public_ip}
-    MASTER IP:  ${aws_instance.k8s_master.private_ip}
-    WORKER IPs: ${join(", ", aws_instance.k8s_workers[*].private_ip)}
-    ALB DNS:    ${aws_lb.k8s_alb.dns_name}
-    URL:        https://ecs.stack-claye.com
-    
-    ============================================
-    ℹ️  ALL INSTANCES USING: ami-0ecb62995f68bb549 (Ubuntu)
-       New Terraform-managed instances:
-       - clixx-k8s-master
-       - clixx-k8s-worker-1
-       - clixx-k8s-worker-2
-    ============================================
-    
-    STEP 1: LOGIN TO MASTER (Run from your local terminal)
-    ============================================
-    # Add key to agent
-    ssh-add ${var.bastion_ssh_key_path} 
-    
-    # Jump through bastion to master
-    ssh -J ubuntu@${aws_instance.bastion[0].public_ip} ubuntu@${aws_instance.k8s_master.private_ip}
-    
-    ============================================
-    STEP 2: INITIALIZE CLUSTER (On Master)
-    ============================================
-    sudo kubeadm init
-    
-    # Run the 3 commands output by kubeadm to configure .kube/config:
-    mkdir -p $HOME/.kube
-    sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-    sudo chown $(id -u):$(id -g) $HOME/.kube/config
-    
-    ============================================
-    STEP 3: INSTALL WEAVENET CNI (On Master)
-    ============================================
-    # This matches your manual deployment success
-    kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml
-    
-    ============================================
-    STEP 4: JOIN WORKERS (On Workers)
-    ============================================
-    # Get the join command from Master:
-    kubeadm token create --print-join-command
-    
-    # Open new terminal tabs, jump to workers, and run the join command:
-    ssh -J ubuntu@${aws_instance.bastion[0].public_ip} ubuntu@<WORKER_IP_1>
-    ssh -J ubuntu@${aws_instance.bastion[0].public_ip} ubuntu@<WORKER_IP_2>
-    
-    ============================================
-    STEP 5: DEPLOY CLIXX (On Master)
-    ============================================
-    # 1. Create ECR Secret (Important!)
-    kubectl create secret docker-registry ecr-registry-secret \
-      --docker-server=${var.ecr_repository_url} \
-      --docker-username=AWS \
-      --docker-password=$(aws ecr get-login-password --region ${var.aws_region})
-    
-    # 2. Deploy App
-    kubectl apply -f ~/clixx-deployment.yaml
-    kubectl apply -f ~/clixx-service.yaml
-    
-    ============================================
-    STEP 6: MONITORING (On Master)
-    ============================================
-    # This runs the script based on Christine's guide
-    chmod +x ~/install_monitoring.sh
-    ~/install_monitoring.sh
-    
-    ============================================
-  EOT
+output "ssh_to_worker1_via_bastion" {
+  description = "Command to SSH to K8s Worker 1 via Bastion"
+  value       = "ssh -i ${var.private_instance_ssh_key_path} -o ProxyCommand=\"ssh -i ${var.bastion_ssh_key_path} -W %h:%p ubuntu@${aws_instance.bastion[0].public_ip}\" ubuntu@${aws_instance.k8s_workers[0].private_ip}"
 }
 
 # ========================================
-# ECR OUTPUTS (For K8s Secret Creation)
+# ECR CONFIGURATION
 # ========================================
 
 output "ecr_repository_url" {
   description = "ECR repository URL for K8s deployments"
   value       = var.ecr_repository_url
-}
-
-output "ecr_secret_command" {
-  description = "Command to create ECR pull secret in Kubernetes"
-  value       = "kubectl create secret docker-registry ecr-registry-secret --docker-server=${var.ecr_repository_url} --docker-username=AWS --docker-password=$(aws ecr get-login-password --region ${var.aws_region})"
 }
 
 # ========================================
@@ -391,5 +302,76 @@ output "deployment_summary" {
     rds_multi_az       = aws_db_instance.clixx_db.multi_az
     application_url    = "https://ecs.stack-claye.com"
     bastion_ip         = aws_instance.bastion[0].public_ip
+    grafana_access     = "ssh -i ${var.private_instance_ssh_key_path} -o ProxyCommand=\"ssh -i ${var.bastion_ssh_key_path} -W %h:%p ubuntu@${aws_instance.bastion[0].public_ip}\" -L 8080:${aws_instance.k8s_workers[0].private_ip}:31000 ubuntu@${aws_instance.k8s_master.private_ip}"
+    grafana_url        = "http://localhost:8080"
+    grafana_login      = "admin/admin123"
   }
+}
+
+# ========================================
+# GRAFANA MONITORING ACCESS
+# ========================================
+
+output "grafana_access_instructions" {
+  description = "How to access Grafana monitoring dashboard"
+  value = <<-EOT
+    
+    ============================================
+    GRAFANA MONITORING ACCESS
+    ============================================
+    
+    ✅ FULLY AUTOMATED - Grafana installed via Helm
+    
+    SSH Port Forward Command:
+    ============================================
+    ssh -i ${var.private_instance_ssh_key_path} \
+      -o ProxyCommand="ssh -i ${var.bastion_ssh_key_path} -W %h:%p ubuntu@${aws_instance.bastion[0].public_ip}" \
+      -L 8080:${aws_instance.k8s_workers[0].private_ip}:31000 \
+      ubuntu@${aws_instance.k8s_master.private_ip}
+    
+    Then visit: http://localhost:8080
+    Login: admin / admin123
+    
+    ============================================
+    Cluster Status Commands (on master):
+    ============================================
+    kubectl get nodes
+    kubectl get pods -A
+    kubectl get svc -n monitoring
+    
+    ============================================
+  EOT
+}
+
+# ========================================
+# AUTOMATION STATUS
+# ========================================
+
+output "automation_summary" {
+  description = "What was automated in this deployment"
+  value = <<-EOT
+    
+    ============================================
+    AUTOMATED DEPLOYMENT COMPLETE! 🎉
+    ============================================
+    
+    ✅ VPC with 12 subnets across 2 AZs
+    ✅ RDS MySQL (Multi-AZ) restored from snapshot
+    ✅ K8s Master initialized with kubeadm
+    ✅ Weave CNI network plugin installed
+    ✅ 2 Worker nodes joined via SSM
+    ✅ ECR image pull secret created
+    ✅ CliXX app deployed (2 replicas)
+    ✅ Prometheus + Grafana monitoring stack
+    ✅ ALB routing traffic to NodePort 30000
+    ✅ Route53 DNS record: ecs.stack-claye.com
+    ✅ HTTPS via ACM certificate
+    
+    Application: https://ecs.stack-claye.com
+    Bastion: ${aws_instance.bastion[0].public_ip}
+    Master: ${aws_instance.k8s_master.private_ip}
+    Workers: ${join(", ", aws_instance.k8s_workers[*].private_ip)}
+    
+    ============================================
+  EOT
 }
