@@ -1,0 +1,281 @@
+pipeline {
+    agent any
+
+    environment {
+        PATH = "${PATH}:${getTerraformPath()}"
+        VERSION = "1.0.${BUILD_NUMBER}"
+        TERRAFORM_DIR = "instances"
+        AWS_REGION = "us-east-1"
+    }
+
+    stages {
+        stage('🎬 Initialize Deployment') {
+            steps {
+                script {
+                    def userInput = input(
+                        id: 'InitParams',
+                        message: 'Kubernetes Pipeline Parameters',
+                        parameters: [
+                            [$class: 'StringParameterDefinition',
+                             name: 'RUNNER',
+                             defaultValue: 'RCLAYE',
+                             description: 'Identify the runner'],
+                            [$class: 'ChoiceParameterDefinition',
+                             name: 'DEPLOY',
+                             choices: "Apply\nDestroy",
+                             description: 'Choose Apply or Destroy']
+                        ]
+                    )
+                    env.RUNNER = userInput['RUNNER']
+                    env.DEPLOY = userInput['DEPLOY']
+                }
+                echo "Pipeline initialized by: ${env.RUNNER}"
+                echo "Action: ${env.DEPLOY}"
+            }
+        }
+
+        stage('🔧 Prepare Infrastructure') {
+            steps {
+                echo "🔧 INFRASTRUCTURE PREPARATION - User: ${env.RUNNER}"
+                sh """
+                    cd ${TERRAFORM_DIR}
+                    terraform init -migrate-state
+                """
+            }
+        }
+
+        stage('📋 Plan Deployment') {
+            when {
+                expression { env.DEPLOY == 'Apply' }
+            }
+            steps {
+                withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
+                    echo "📋 DEPLOYMENT PLANNING - User: ${env.RUNNER}"
+                    sh """
+                        cd ${TERRAFORM_DIR}
+                        terraform plan \
+                          -var-file="\$TFVARS_FILE" \
+                          -out=tfplan \
+                          -input=false
+                    """
+                }
+            }
+        }
+
+        stage('🚀 Deploy Infrastructure') {
+            when {
+                expression { env.DEPLOY == 'Apply' }
+            }
+            steps {
+                withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
+                    echo "🚀 DEPLOYING K8S INFRASTRUCTURE - User: ${env.RUNNER}"
+                    sh """
+                        cd ${TERRAFORM_DIR}
+                        terraform apply -input=false tfplan
+                    """
+                }
+            }
+            post {
+                success {
+                    echo """✅ TERRAFORM APPLY SUCCESS
+Infrastructure deployed! Waiting for K8s cluster to initialize...
+User: ${env.RUNNER}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
+                }
+                failure {
+                    echo """❌ TERRAFORM APPLY FAILED
+Infrastructure deployment failed.
+User: ${env.RUNNER}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
+                }
+            }
+        }
+
+        stage('⏳ Wait for Cluster Ready') {
+            when {
+                expression { env.DEPLOY == 'Apply' }
+            }
+            steps {
+                script {
+                    echo "⏳ Waiting for Kubernetes cluster to initialize..."
+                    echo "This usually takes 15-25 minutes (RDS + K8s bootstrapping)"
+                    
+                    timeout(time: 30, unit: 'MINUTES') {
+                        waitUntil(initialRecurrencePeriod: 30000, quiet: true) {
+                            script {
+                                try {
+                                    def status = sh(
+                                        script: """
+                                            aws ssm get-parameter \
+                                              --name '/clixx/k8s-status' \
+                                              --query 'Parameter.Value' \
+                                              --output text \
+                                              --region ${AWS_REGION} 2>/dev/null || echo 'Waiting'
+                                        """,
+                                        returnStdout: true
+                                    ).trim()
+                                    
+                                    echo "Current Cluster Status: ${status}"
+                                    return status == 'Ready'
+                                } catch (Exception e) {
+                                    echo "Waiting for master node to signal ready..."
+                                    return false
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            post {
+                success {
+                    echo "✅ KUBERNETES CLUSTER IS READY!"
+                }
+                failure {
+                    echo "❌ CLUSTER INITIALIZATION TIMEOUT - Check master node logs"
+                }
+            }
+        }
+
+        stage('🎉 Deployment Complete') {
+            when {
+                expression { env.DEPLOY == 'Apply' }
+            }
+            steps {
+                script {
+                    def appUrl = sh(
+                        script: "cd ${TERRAFORM_DIR} && terraform output -raw application_url 2>/dev/null || echo 'https://ecs.stack-claye.com'",
+                        returnStdout: true
+                    ).trim()
+                    
+                    def bastionIp = sh(
+                        script: "cd ${TERRAFORM_DIR} && terraform output -raw bastion_public_ip 2>/dev/null || echo 'N/A'",
+                        returnStdout: true
+                    ).trim()
+                    
+                    echo """
+========================================
+🎉 KUBERNETES DEPLOYMENT COMPLETE!
+========================================
+🌐 Application URL: ${appUrl}
+📊 Grafana: http://<WORKER_IP>:31000 (admin/admin123)
+🔑 Bastion IP: ${bastionIp}
+👤 Deployed by: ${env.RUNNER}
+========================================
+                    """
+                }
+            }
+        }
+
+        stage('🗑️ Destroy Infrastructure') {
+            when {
+                expression { env.DEPLOY == 'Destroy' }
+            }
+            steps {
+                script {
+                    input(
+                        id: 'destroy_confirm',
+                        message: "⚠️ Are you sure you want to DESTROY the K8s cluster?",
+                        ok: "Yes, Destroy"
+                    )
+                }
+                withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
+                    echo "🗑️ DESTROYING INFRASTRUCTURE - User: ${env.RUNNER}"
+                    sh """
+                        cd ${TERRAFORM_DIR}
+                        
+                        echo "Cleaning up SSM parameters..."
+                        aws ssm delete-parameter --name '/clixx/k8s-join-command' --region ${AWS_REGION} || true
+                        aws ssm delete-parameter --name '/clixx/k8s-status' --region ${AWS_REGION} || true
+                        
+                        echo "Running terraform destroy..."
+                        terraform destroy \
+                          -var-file="\$TFVARS_FILE" \
+                          -auto-approve
+                    """
+                }
+            }
+            post {
+                success {
+                    echo "✅ INFRASTRUCTURE DESTROYED SUCCESSFULLY"
+                }
+                failure {
+                    echo "❌ DESTROY FAILED - Manual cleanup may be required"
+                }
+            }
+        }
+    }
+
+    post {
+        cleanup {
+            script {
+                if (currentBuild.currentResult == 'SUCCESS' && env.DEPLOY == 'Apply') {
+                    def destroyInfra = false
+                    try {
+                        timeout(time: 5, unit: 'MINUTES') {
+                            input(
+                                id: 'post_destroy_confirm',
+                                message: "🎉 Deployment successful! Do you want to destroy the environment now?",
+                                ok: "Yes, Destroy Now",
+                                submitter: env.RUNNER
+                            )
+                        }
+                        destroyInfra = true
+                        echo "🗑️ POST-DEPLOY DESTROY APPROVED by ${env.RUNNER}"
+                    } catch(err) {
+                        destroyInfra = false
+                        echo "✅ Infrastructure remains deployed - timeout or declined"
+                    }
+
+                    if (destroyInfra) {
+                        echo "🧹 Proceeding with Infrastructure Cleanup..."
+                        withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
+                            try {
+                                sh """
+                                    set -e
+                                    cd ${TERRAFORM_DIR}
+                                    
+                                    echo "Cleaning up SSM parameters..."
+                                    aws ssm delete-parameter --name '/clixx/k8s-join-command' --region ${AWS_REGION} || true
+                                    aws ssm delete-parameter --name '/clixx/k8s-status' --region ${AWS_REGION} || true
+                                    
+                                    echo "Running terraform destroy..."
+                                    terraform destroy \
+                                      -var-file="\$TFVARS_FILE" \
+                                      -auto-approve
+                                """
+                                echo "✅ INFRASTRUCTURE DESTROYED SUCCESSFULLY"
+                            } catch (e) {
+                                echo "❌ DESTROY FAILED - Manual cleanup required"
+                            }
+                        }
+                    }
+                } else if (currentBuild.currentResult == 'FAILURE') {
+                    echo "⚠️ PIPELINE FAILED - Review logs before manual cleanup"
+                }
+            }
+        }
+        
+        success {
+            echo """
+✅ PIPELINE COMPLETED SUCCESSFULLY
+User: ${env.RUNNER}
+Action: ${env.DEPLOY}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]
+            """
+        }
+        
+        failure {
+            echo """
+❌ PIPELINE FAILED
+User: ${env.RUNNER}
+Action: ${env.DEPLOY}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]
+Check the logs above for details.
+            """
+        }
+    }
+}
+
+def getTerraformPath() {
+    return tool(name: 'terraform-14', type: 'terraform')
+}

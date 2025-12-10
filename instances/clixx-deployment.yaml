@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clixx-web-deployment
+  labels:
+    app: clixx-web-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: clixx-web-app
+  template:
+    metadata:
+      labels:
+        app: clixx-web-app
+    spec:
+      # Required for pulling private ECR image via token we created
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      containers:
+      - name: clixx-web-app
+        # Use your actual ECR repository URL and specific tag
+        image: 924305315126.dkr.ecr.us-east-1.amazonaws.com/clixx-repository2:clixx-image-1.0.42
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
