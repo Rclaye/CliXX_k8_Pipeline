@@ -91,51 +91,6 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
             }
         }
 
-        stage('⏳ Wait for Cluster Ready') {
-            when {
-                expression { env.DEPLOY == 'Apply' }
-            }
-            steps {
-                script {
-                    echo "⏳ Waiting for Kubernetes cluster to initialize..."
-                    echo "This usually takes 15-25 minutes (RDS + K8s bootstrapping)"
-                    
-                    timeout(time: 30, unit: 'MINUTES') {
-                        waitUntil(initialRecurrencePeriod: 30000, quiet: true) {
-                            script {
-                                try {
-                                    def status = sh(
-                                        script: """
-                                            aws ssm get-parameter \
-                                              --name '/clixx/k8s-status' \
-                                              --query 'Parameter.Value' \
-                                              --output text \
-                                              --region ${AWS_REGION} 2>/dev/null || echo 'Waiting'
-                                        """,
-                                        returnStdout: true
-                                    ).trim()
-                                    
-                                    echo "Current Cluster Status: ${status}"
-                                    return status == 'Ready'
-                                } catch (Exception e) {
-                                    echo "Waiting for master node to signal ready..."
-                                    return false
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            post {
-                success {
-                    echo "✅ KUBERNETES CLUSTER IS READY!"
-                }
-                failure {
-                    echo "❌ CLUSTER INITIALIZATION TIMEOUT - Check master node logs"
-                }
-            }
-        }
-
         stage('🎉 Deployment Complete') {
             when {
                 expression { env.DEPLOY == 'Apply' }
@@ -152,14 +107,25 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                         returnStdout: true
                     ).trim()
                     
+                    def masterIp = sh(
+                        script: "cd ${TERRAFORM_DIR} && terraform output -raw k8s_master_private_ip 2>/dev/null || echo 'N/A'",
+                        returnStdout: true
+                    ).trim()
+                    
                     echo """
 ========================================
-🎉 KUBERNETES DEPLOYMENT COMPLETE!
+🎉 INFRASTRUCTURE DEPLOYED!
 ========================================
 🌐 Application URL: ${appUrl}
 📊 Grafana: http://<WORKER_IP>:31000 (admin/admin123)
 🔑 Bastion IP: ${bastionIp}
+🖥️  Master IP: ${masterIp}
 👤 Deployed by: ${env.RUNNER}
+
+⏳ NOTE: K8s cluster is still initializing (~15-20 min)
+   Monitor progress:
+   ssh -J ubuntu@${bastionIp} ubuntu@${masterIp}
+   sudo tail -f /var/log/combined-master-init.log
 ========================================
                     """
                 }
@@ -185,7 +151,6 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                         
                         echo "Cleaning up SSM parameters..."
                         aws ssm delete-parameter --name '/clixx/k8s-join-command' --region ${AWS_REGION} || true
-                        aws ssm delete-parameter --name '/clixx/k8s-status' --region ${AWS_REGION} || true
                         
                         echo "Running terraform destroy..."
                         terraform destroy \
@@ -215,8 +180,7 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                             input(
                                 id: 'post_destroy_confirm',
                                 message: "🎉 Deployment successful! Do you want to destroy the environment now?",
-                                ok: "Yes, Destroy Now",
-                                submitter: env.RUNNER
+                                ok: "Yes, Destroy Now"
                             )
                         }
                         destroyInfra = true
@@ -236,7 +200,6 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                                     
                                     echo "Cleaning up SSM parameters..."
                                     aws ssm delete-parameter --name '/clixx/k8s-join-command' --region ${AWS_REGION} || true
-                                    aws ssm delete-parameter --name '/clixx/k8s-status' --region ${AWS_REGION} || true
                                     
                                     echo "Running terraform destroy..."
                                     terraform destroy \

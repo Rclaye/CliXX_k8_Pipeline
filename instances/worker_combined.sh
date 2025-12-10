@@ -9,10 +9,24 @@ set -e
 exec > >(tee /var/log/combined-worker-init.log|logger -t combined-worker -s 2>/dev/console) 2>&1
 
 echo "=========================================="
+echo "PART 0: Installing AWS CLI FIRST"
+echo "=========================================="
+
+# Install AWS CLI FIRST (needed for SSM commands)
+sudo apt-get update
+sudo apt-get install -y unzip curl
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip -q awscliv2.zip
+sudo ./aws/install
+rm -rf awscliv2.zip aws/
+
+# Verify AWS CLI works
+aws --version
+
+echo "=========================================="
 echo "PART 1: Installing Kubernetes Tools"
 echo "=========================================="
 
-# ...existing code from install_k8s_tools.sh...
 INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 echo "Instance ID: $INSTANCE_ID"
 
@@ -35,8 +49,7 @@ EOF
 
 sudo sysctl --system
 
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl gnupg
+sudo apt-get install -y ca-certificates gnupg
 
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -68,15 +81,25 @@ sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 sudo systemctl enable kubelet
 
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-sudo apt-get install -y unzip
-unzip -q awscliv2.zip
-sudo ./aws/install
-rm -rf awscliv2.zip aws/
-
 echo "=========================================="
 echo "PART 2: Joining Kubernetes Cluster"
 echo "=========================================="
+
+# Set hostname based on private IP last octet
+WORKER_IP=$(hostname -I | awk '{print $1}')
+LAST_OCTET=$(echo $WORKER_IP | cut -d. -f4)
+
+# Simple logic: if IP ends in 35 → worker1, if 33 → worker2
+if [ "$LAST_OCTET" -eq 35 ]; then
+    HOSTNAME="k8_Worker1"
+elif [ "$LAST_OCTET" -eq 33 ]; then
+    HOSTNAME="k8_Worker2"
+else
+    HOSTNAME="k8_Worker$LAST_OCTET"  # Fallback
+fi
+
+sudo hostnamectl set-hostname $HOSTNAME
+echo "$WORKER_IP $HOSTNAME" | sudo tee -a /etc/hosts
 
 # Wait for kubelet
 for i in {1..30}; do
@@ -87,7 +110,7 @@ for i in {1..30}; do
     sleep 10
 done
 
-# Wait for join command in SSM (using template variable)
+# Wait for join command in SSM
 for i in {1..60}; do
     JOIN_COMMAND=$(aws ssm get-parameter \
         --name "/clixx/k8s-join-command" \
@@ -95,7 +118,7 @@ for i in {1..60}; do
         --output text \
         --region ${aws_region} 2>/dev/null || echo "")
     
-    if [ -n "$JOIN_COMMAND" ]; then
+    if [ -n "$JOIN_COMMAND" ] && [ "$JOIN_COMMAND" != "None" ]; then
         echo "Join command retrieved!"
         break
     fi
@@ -103,7 +126,7 @@ for i in {1..60}; do
     sleep 30
 done
 
-if [ -z "$JOIN_COMMAND" ]; then
+if [ -z "$JOIN_COMMAND" ] || [ "$JOIN_COMMAND" == "None" ]; then
     echo "ERROR: No join command found"
     exit 1
 fi
@@ -112,5 +135,5 @@ fi
 sudo $JOIN_COMMAND
 
 echo "=========================================="
-echo "WORKER JOINED CLUSTER SUCCESSFULLY!"
+echo "WORKER $HOSTNAME JOINED CLUSTER SUCCESSFULLY!"
 echo "=========================================="

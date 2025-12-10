@@ -6,15 +6,26 @@
 # ========================================
 
 set -e
-# Log everything to /var/log/user-data.log
 exec > >(tee /var/log/combined-master-init.log|logger -t combined-master -s 2>/dev/console) 2>&1
+
+echo "=========================================="
+echo "PART 0: Installing AWS CLI FIRST"
+echo "=========================================="
+
+# Install AWS CLI FIRST (needed for SSM commands)
+sudo apt-get update
+sudo apt-get install -y unzip curl
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip -q awscliv2.zip
+sudo ./aws/install
+rm -rf awscliv2.zip aws/
+
+# Verify AWS CLI works
+aws --version
 
 echo "=========================================="
 echo "PART 1: Installing Kubernetes Tools"
 echo "=========================================="
-
-# 1. Initialize Status as 'Initializing'
-aws ssm put-parameter --name "/clixx/k8s-status" --value "Initializing" --type "String" --overwrite --region ${aws_region}
 
 INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 echo "Instance ID: $INSTANCE_ID"
@@ -42,10 +53,9 @@ EOF
 sudo sysctl --system
 
 # Containerd Prerequisites
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl gnupg
+sudo apt-get install -y ca-certificates gnupg
 
-# Docker Repo & GPG (Required for Ubuntu 24.04 compatibility)
+# Docker Repo & GPG
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
@@ -77,13 +87,6 @@ sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 sudo systemctl enable kubelet
 
-# AWS CLI
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-sudo apt-get install -y unzip
-unzip -q awscliv2.zip
-sudo ./aws/install
-rm -rf awscliv2.zip aws/
-
 # Helm
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
@@ -92,14 +95,14 @@ echo "PART 2: Initializing Master Node"
 echo "=========================================="
 
 # Initialize Cluster
-sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=NumCPU,Mem
+sudo kubeadm init --pod-network-cidr=192.168.0.0/16 --ignore-preflight-errors=NumCPU,Mem
 
 # Configure kubectl for ubuntu user
 mkdir -p /home/ubuntu/.kube
 sudo cp -i /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
 sudo chown ubuntu:ubuntu /home/ubuntu/.kube/config
 
-# Install WeaveNet CNI (As per your manual testing success)
+# Install WeaveNet CNI
 sudo -u ubuntu kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml
 
 # Wait for Weave to be ready
@@ -123,7 +126,7 @@ sudo -u ubuntu kubectl create secret docker-registry ecr-registry-secret \
     --docker-password="$ECR_PASSWORD" \
     --dry-run=client -o yaml | sudo -u ubuntu kubectl apply -f -
 
-# Write Manifest Files (From Terraform Template)
+# Write Manifest Files
 cat <<'DEPLOYMENT_EOF' | sudo -u ubuntu tee /home/ubuntu/clixx-deployment.yaml
 ${deployment_yaml}
 DEPLOYMENT_EOF
@@ -142,37 +145,23 @@ echo "PART 3: Install Monitoring Stack"
 echo "=========================================="
 
 # Add Repo
-sudo -u ubuntu helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+sudo -u ubuntu helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
 sudo -u ubuntu helm repo update
 
 # Create Namespace
 sudo -u ubuntu kubectl create namespace monitoring --dry-run=client -o yaml | sudo -u ubuntu kubectl apply -f -
 
 # Install Prometheus/Grafana via Helm
-# We explicitly set NodePorts so we can access them externally via the Worker IPs
 sudo -u ubuntu helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
     --namespace monitoring \
     --set grafana.enabled=true \
     --set grafana.adminPassword=admin123 \
     --set grafana.service.type=NodePort \
     --set grafana.service.nodePort=31000 \
-    --set prometheus.service.type=NodePort \
-    --set prometheus.service.nodePort=31090 \
-    --set alertmanager.service.type=NodePort \
-    --set alertmanager.service.nodePort=31093 \
-    --wait --timeout 15m
-
-echo "Monitoring installed."
-
-# --- FINAL SIGNAL TO JENKINS ---
-# This tells the pipeline the cluster is fully ready
-aws ssm put-parameter \
-    --name "/clixx/k8s-status" \
-    --value "Ready" \
-    --type "String" \
-    --overwrite \
-    --region ${aws_region}
+    --wait --timeout 15m || echo "Monitoring install failed but continuing..."
 
 echo "=========================================="
 echo "MASTER INITIALIZATION COMPLETE!"
 echo "=========================================="
+sudo -u ubuntu kubectl get nodes
+sudo -u ubuntu kubectl get pods -A
