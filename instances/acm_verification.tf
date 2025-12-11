@@ -7,7 +7,7 @@ data "aws_acm_certificate" "clixx_cert" {
   most_recent = true
 }
 
-# Use local variable to determine which certificate ARN to use
+# Local variable to determine which certificate ARN to use
 locals {
   certificate_arn = data.aws_acm_certificate.clixx_cert.arn != "" ? data.aws_acm_certificate.clixx_cert.arn : var.certificate_arn
 }

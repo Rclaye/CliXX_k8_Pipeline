@@ -1,4 +1,5 @@
 # Bastion Host Configuration
+
 # IAM Role and Policy for Bastion Host with SSM Access
 resource "aws_iam_role" "bastion_role" {
   name = "clixx-bastion-role"
@@ -20,6 +21,7 @@ resource "aws_iam_role_policy_attachment" "bastion_ssm_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# IAM Instance Profile for Bastion Host
 resource "aws_iam_instance_profile" "bastion_profile" {
   name = "clixx-bastion-profile"
   role = aws_iam_role.bastion_role.name

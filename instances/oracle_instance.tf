@@ -77,8 +77,8 @@ resource "aws_iam_instance_profile" "oracle_instance_profile" {
 
 # Oracle EC2 instance
 resource "aws_instance" "oracle_db_instance" {
-  count                  = 0  # Set to 0 since you don't need the actual instance yet
-  ami                    = var.bastion_ami_id  # ✅ Fixed: Use bastion_ami_id or ec2_ami (not ecs_optimized)
+  count                  = 0  # Set to until further notice
+  ami                    = var.bastion_ami_id
   instance_type          = "t2.large"
   subnet_id              = length(aws_subnet.private_oracle) > 0 ? aws_subnet.private_oracle[0].id : null
   vpc_security_group_ids = [aws_security_group.oracle_instance_sg.id]

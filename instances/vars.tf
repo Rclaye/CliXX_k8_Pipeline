@@ -29,7 +29,7 @@ variable "availability_zones" {
   type        = list(string)
 }
 
-# Updated subnet CIDR variables to match 2-AZ requirements
+# Subnet CIDR variables to match 2-AZs
 variable "public_subnet_cidrs" {
   description = "CIDR blocks for public subnets (450 hosts each)"
   type        = list(string)
@@ -274,8 +274,8 @@ variable "wp_admin_email" {
 }
 
 # ========================================
-# ECR SETTINGS (Used for K8s image pulls)
-# These are needed to create the ECR pull secret in Kubernetes
+# ECR SETTINGS
+# Use = Create the ECR pull secret in Kubernetes
 # ========================================
 
 variable "ecr_repository_name" {
@@ -309,7 +309,7 @@ variable "k8s_master_instance_type" {
 variable "k8s_worker_instance_type" {
   description = "Instance type for K8s Workers"
   type        = string
-  default     = "t3.large" # Enough RAM for App + Prometheus stack
+  default     = "t3.large" # More RAM for App + Prometheus stack
 }
 
 variable "k8s_ami_id" {

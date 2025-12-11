@@ -126,3 +126,12 @@ resource "aws_instance" "k8s_workers" {
     aws_instance.k8s_master
   ]
 }
+
+# ========================================
+# OUTPUTS
+# ========================================
+
+output "grafana_url" {
+  description = "URL to access Grafana dashboard"
+  value       = "https://grafana.stack-claye.com"
+}

@@ -102,6 +102,11 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                         returnStdout: true
                     ).trim()
                     
+                    def grafanaUrl = sh(
+                        script: "cd ${TERRAFORM_DIR} && terraform output -raw grafana_url 2>/dev/null || echo 'https://grafana.stack-claye.com'",
+                        returnStdout: true
+                    ).trim()
+                    
                     def bastionIp = sh(
                         script: "cd ${TERRAFORM_DIR} && terraform output -raw bastion_public_ip 2>/dev/null || echo 'N/A'",
                         returnStdout: true
@@ -117,7 +122,7 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
 🎉 INFRASTRUCTURE DEPLOYED!
 ========================================
 🌐 Application URL: ${appUrl}
-📊 Grafana: http://<WORKER_IP>:31000 (admin/admin123)
+📊 Grafana URL: ${grafanaUrl} (admin/admin123)
 🔑 Bastion IP: ${bastionIp}
 🖥️  Master IP: ${masterIp}
 👤 Deployed by: ${env.RUNNER}
