@@ -29,6 +29,14 @@ pipeline {
                     env.RUNNER = userInput['RUNNER']
                     env.DEPLOY = userInput['DEPLOY']
                 }
+                slackSend(
+                    channel: '#stackjenkins',
+                    color: '#FFFF01',
+                    message: """K8S PIPELINE INITIALIZED
+User: ${env.RUNNER}
+Action: ${env.DEPLOY}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
+                )
                 echo "Pipeline initialized by: ${env.RUNNER}"
                 echo "Action: ${env.DEPLOY}"
             }
@@ -36,6 +44,14 @@ pipeline {
 
         stage('🔧 Prepare Infrastructure') {
             steps {
+                slackSend(
+                    channel: '#stackjenkins',
+                    color: '#3498DB',
+                    message: """TERRAFORM INIT
+Status: Started
+User: ${env.RUNNER}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
+                )
                 echo "🔧 INFRASTRUCTURE PREPARATION - User: ${env.RUNNER}"
                 sh """
                     cd ${TERRAFORM_DIR}
@@ -50,6 +66,14 @@ pipeline {
             }
             steps {
                 withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
+                    slackSend(
+                        channel: '#stackjenkins',
+                        color: '#F39C12',
+                        message: """TERRAFORM PLAN
+Status: Started
+User: ${env.RUNNER}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
+                    )
                     echo "📋 DEPLOYMENT PLANNING - User: ${env.RUNNER}"
                     sh """
                         cd ${TERRAFORM_DIR}
@@ -68,6 +92,14 @@ pipeline {
             }
             steps {
                 withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
+                    slackSend(
+                        channel: '#stackjenkins',
+                        color: '#2ECC71',
+                        message: """TERRAFORM APPLY
+Status: Started
+User: ${env.RUNNER}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
+                    )
                     echo "🚀 DEPLOYING K8S INFRASTRUCTURE - User: ${env.RUNNER}"
                     sh """
                         cd ${TERRAFORM_DIR}
@@ -77,12 +109,42 @@ pipeline {
             }
             post {
                 success {
+                    script {
+                        def appUrl = sh(
+                            script: "cd ${TERRAFORM_DIR} && terraform output -raw application_url 2>/dev/null || echo 'https://ecs.stack-claye.com'",
+                            returnStdout: true
+                        ).trim()
+                        
+                        def grafanaUrl = sh(
+                            script: "cd ${TERRAFORM_DIR} && terraform output -raw grafana_url 2>/dev/null || echo 'https://grafana.stack-claye.com'",
+                            returnStdout: true
+                        ).trim()
+                        
+                        slackSend(
+                            channel: '#stackjenkins',
+                            color: '#2ECC71',
+                            message: """✅ TERRAFORM APPLY SUCCESS
+Infrastructure deployed!
+🌐 CliXX App: ${appUrl}
+📊 Grafana: ${grafanaUrl}
+User: ${env.RUNNER}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
+                        )
+                    }
                     echo """✅ TERRAFORM APPLY SUCCESS
 Infrastructure deployed! Waiting for K8s cluster to initialize...
 User: ${env.RUNNER}
 Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                 }
                 failure {
+                    slackSend(
+                        channel: '#stackjenkins',
+                        color: '#C0392B',
+                        message: """❌ TERRAFORM APPLY FAILED
+Infrastructure deployment failed.
+User: ${env.RUNNER}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
+                    )
                     echo """❌ TERRAFORM APPLY FAILED
 Infrastructure deployment failed.
 User: ${env.RUNNER}
@@ -150,6 +212,14 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                     )
                 }
                 withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
+                    slackSend(
+                        channel: '#stackjenkins',
+                        color: '#E74C3C',
+                        message: """🗑️ TERRAFORM DESTROY
+Status: Started
+User: ${env.RUNNER}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
+                    )
                     echo "🗑️ DESTROYING INFRASTRUCTURE - User: ${env.RUNNER}"
                     sh """
                         cd ${TERRAFORM_DIR}
@@ -166,9 +236,23 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
             }
             post {
                 success {
+                    slackSend(
+                        channel: '#stackjenkins',
+                        color: '#9B59B6',
+                        message: """✅ INFRASTRUCTURE DESTROYED SUCCESSFULLY
+User: ${env.RUNNER}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
+                    )
                     echo "✅ INFRASTRUCTURE DESTROYED SUCCESSFULLY"
                 }
                 failure {
+                    slackSend(
+                        channel: '#stackjenkins',
+                        color: '#C0392B',
+                        message: """❌ DESTROY FAILED - Manual cleanup may be required
+User: ${env.RUNNER}
+Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
+                    )
                     echo "❌ DESTROY FAILED - Manual cleanup may be required"
                 }
             }
@@ -193,13 +277,28 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                             ]
                         )
                         destroyInfra = true
+                        slackSend(
+                            channel: '#stackjenkins',
+                            color: '#E74C3C',
+                            message: "DESTROY APPROVED by ${env.RUNNER}. Removing infrastructure."
+                        )
                         echo "🗑️ DESTROY APPROVED by ${env.RUNNER}"
                     } catch(err) {
                         destroyInfra = false
+                        slackSend(
+                            channel: '#stackjenkins',
+                            color: '#2ECC71',
+                            message: "Destroy not approved. Infrastructure remains."
+                        )
                         echo "✅ Infrastructure remains deployed"
                     }
                 } else if (currentBuild.currentResult == 'FAILURE') {
                     destroyInfra = true
+                    slackSend(
+                        channel: '#stackjenkins',
+                        color: '#C0392B',
+                        message: "PIPELINE FAILED. Triggering automatic cleanup and destroy."
+                    )
                     echo "⚠️ PIPELINE FAILED - Auto cleanup triggered"
                 }
 
@@ -219,8 +318,18 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                                   -var-file="\$TFVARS_FILE" \
                                   -auto-approve
                             """
+                            slackSend(
+                                channel: '#stackjenkins',
+                                color: '#9B59B6',
+                                message: "${env.RUNNER}'s TERRAFORM DESTROY SUCCESSFUL."
+                            )
                             echo "✅ INFRASTRUCTURE DESTROYED SUCCESSFULLY"
                         } catch (e) {
+                            slackSend(
+                                channel: '#stackjenkins',
+                                color: '#C0392B',
+                                message: "ERROR: TERRAFORM DESTROY FAILED. Manual cleanup may be required."
+                            )
                             echo "❌ DESTROY FAILED - Manual cleanup required"
                             throw e
                         }
