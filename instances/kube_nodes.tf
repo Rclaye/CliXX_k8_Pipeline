@@ -70,7 +70,7 @@ resource "aws_instance" "k8s_master" {
   iam_instance_profile   = aws_iam_instance_profile.k8s_instance_profile.name
 
   # Use templatefile with variables
-  user_data = templatefile("${path.module}/master_combined.sh", {
+  user_data = templatefile("${path.module}/master_userdata.sh", {
     aws_region         = var.aws_region
     ecr_repository_url = var.ecr_repository_url
     deployment_yaml    = file("${path.module}/clixx-deployment.yaml")
@@ -105,7 +105,7 @@ resource "aws_instance" "k8s_workers" {
   iam_instance_profile   = aws_iam_instance_profile.k8s_instance_profile.name
 
   # Use templatefile with aws_region variable
-  user_data = templatefile("${path.module}/worker_combined.sh", {
+  user_data = templatefile("${path.module}/worker_userdata.sh", {
     aws_region = var.aws_region
   })
 
