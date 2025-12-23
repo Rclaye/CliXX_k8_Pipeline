@@ -12,7 +12,7 @@ echo "=========================================="
 echo "PART 0: Installing AWS CLI FIRST"
 echo "=========================================="
 
-# Install AWS CLI FIRST (needed for SSM commands)
+# Install AWS CLI for SSM commands
 sudo apt-get update
 sudo apt-get install -y unzip curl
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
