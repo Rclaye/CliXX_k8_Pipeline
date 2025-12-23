@@ -1,34 +1,18 @@
 pipeline {
     agent any
 
-    parameters {
-        string(
-            name: 'RUNNER',
-            defaultValue: 'WEBHOOK',
-            description: 'Identify the runner (auto-populated by webhook or manual user)'
-        )
-        choice(
-            name: 'DEPLOY',
-            choices: ['Apply', 'Destroy'],
-            description: 'Choose Apply or Destroy'
-        )
-    }
-
     environment {
         PATH = "${PATH}:${getTerraformPath()}"
         VERSION = "1.0.${BUILD_NUMBER}"
         TERRAFORM_DIR = "instances"
         AWS_REGION = "us-east-1"
+        RUNNER = "RCLAYE"
+        DEPLOY = "Apply"
     }
 
     stages {
         stage('🎬 Initialize Deployment') {
             steps {
-                script {
-                    // Set environment variables from parameters
-                    env.RUNNER = params.RUNNER
-                    env.DEPLOY = params.DEPLOY
-                }
                 echo "Pipeline initialized by: ${env.RUNNER}"
                 echo "Action: ${env.DEPLOY}"
                 echo "Triggered by: ${currentBuild.getBuildCauses()[0].shortDescription}"
@@ -172,7 +156,7 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                 withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
                     echo "🗑️ DESTROYING INFRASTRUCTURE - User: ${env.RUNNER}"
                     sh """
-                `        cd ${TERRAFORM_DIR}
+                        cd ${TERRAFORM_DIR}
                         
                         echo "Cleaning up SSM parameters..."
                         aws ssm delete-parameter --name '/clixx/k8s-join-command' --region ${AWS_REGION} || true
