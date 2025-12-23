@@ -314,7 +314,7 @@ output "deployment_summary" {
 
 output "grafana_access_instructions" {
   description = "How to access Grafana monitoring dashboard"
-  value       = <<-EOT
+  value = <<-EOT
     
     ============================================
     GRAFANA MONITORING ACCESS
@@ -349,7 +349,7 @@ output "grafana_access_instructions" {
 
 output "automation_summary" {
   description = "What was automated in this deployment"
-  value       = <<-EOT
+  value = <<-EOT
     
     ============================================
     AUTOMATED DEPLOYMENT COMPLETE! 🎉

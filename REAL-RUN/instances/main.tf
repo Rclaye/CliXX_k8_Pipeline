@@ -3,11 +3,11 @@
 
 locals {
   custom_tags = {
-    owner     = "richard.claye@gmail.com"
-    Stackteam = "StackCloud13"
-    CreatedBy = "Terraform"
+    owner       = "richard.claye@gmail.com"
+    Stackteam   = "StackCloud13"
+    CreatedBy   = "Terraform"
   }
-
+  
   # Private subnet IDs for use in resources
   all_private_subnets = concat(
     aws_subnet.private_app[*].id,
@@ -118,7 +118,7 @@ resource "aws_security_group" "k8s_sg" {
   # ========================================
   # CONTROL PLANE PORTS
   # ========================================
-
+  
   # Kubernetes API Server
   ingress {
     description = "Kubernetes API Server"
@@ -222,7 +222,7 @@ resource "aws_security_group" "rds_sg" {
     security_groups = [aws_security_group.k8s_sg.id]
     description     = "MySQL access from K8s nodes"
   }
-
+  
   # Allow from private app subnets (CIDR-based as backup)
   ingress {
     from_port   = 3306
@@ -266,7 +266,7 @@ resource "aws_security_group" "oracle_sg" {
     security_groups = [aws_security_group.k8s_sg.id]
     description     = "Oracle access from K8s nodes"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -322,7 +322,7 @@ resource "aws_db_parameter_group" "mysql80" {
   name        = "clixx-mysql80"
   family      = "mysql8.0"
   description = "Custom parameter group for MySQL 8.0"
-
+  
   tags = merge(
     var.common_tags,
     {
@@ -339,20 +339,20 @@ resource "aws_db_instance" "clixx_db" {
   snapshot_identifier    = var.db_snapshot_identifier
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.clixx_db_subnet_group.name
-  multi_az               = true
+  multi_az               = true  
   publicly_accessible    = false
-  skip_final_snapshot    = true
+  skip_final_snapshot    = true  
   storage_encrypted      = true
-  apply_immediately      = true
+  apply_immediately      = true  
 
   auto_minor_version_upgrade = false
-
+  
   backup_retention_period = 0
   backup_window           = null
   maintenance_window      = "Mon:00:00-Mon:03:00"
-
+  
   parameter_group_name = aws_db_parameter_group.mysql80.name
-
+  
   tags = merge(
     var.common_tags,
     {
@@ -542,24 +542,24 @@ resource "aws_ssm_parameter" "db_user" {
 }
 
 resource "aws_ssm_parameter" "db_password" {
-  name  = "/clixx/db_password"
-  type  = "SecureString"
-  value = var.db_password
+  name      = "/clixx/db_password"
+  type      = "SecureString"
+  value     = var.db_password
 }
 
 resource "aws_ssm_parameter" "rds_endpoint" {
-  name  = "/clixx/RDS_ENDPOINT"
-  type  = "String"
-  value = aws_db_instance.clixx_db.address
+  name      = "/clixx/RDS_ENDPOINT"
+  type      = "String"
+  value     = aws_db_instance.clixx_db.address
 
   depends_on = [aws_db_instance.clixx_db]
 }
 
 # Updated to reference K8s ALB
 resource "aws_ssm_parameter" "lb_dns" {
-  name  = "/clixx/lb_dns"
-  type  = "String"
-  value = aws_lb.k8s_alb.dns_name
+  name      = "/clixx/lb_dns"
+  type      = "String"
+  value     = aws_lb.k8s_alb.dns_name
 
   tags = merge(
     var.common_tags,
@@ -568,7 +568,7 @@ resource "aws_ssm_parameter" "lb_dns" {
     },
     local.custom_tags
   )
-
+  
   depends_on = [aws_lb.k8s_alb]
 }
 
@@ -597,9 +597,9 @@ resource "aws_ssm_parameter" "wp_admin_user" {
 }
 
 resource "aws_ssm_parameter" "wp_admin_password" {
-  name  = "/clixx/wp_admin_password"
-  type  = "SecureString"
-  value = var.wp_admin_password
+  name      = "/clixx/wp_admin_password"
+  type      = "SecureString"
+  value     = var.wp_admin_password
 }
 
 resource "aws_ssm_parameter" "wp_admin_email" {
@@ -610,20 +610,20 @@ resource "aws_ssm_parameter" "wp_admin_email" {
 
 # K8s-specific SSM parameters
 resource "aws_ssm_parameter" "k8s_master_ip" {
-  name  = "/clixx/k8s_master_ip"
-  type  = "String"
-  value = aws_instance.k8s_master.private_ip
+  name      = "/clixx/k8s_master_ip"
+  type      = "String"
+  value     = aws_instance.k8s_master.private_ip
 
   tags = merge(var.common_tags, { Name = "clixx-k8s-master-ip" })
-
+  
   depends_on = [aws_instance.k8s_master]
 }
 
 resource "aws_ssm_parameter" "private_subnet_id" {
-  name  = "/clixx/private_subnet_id"
-  type  = "String"
-  value = aws_subnet.private_app[0].id
-
+  name      = "/clixx/private_subnet_id"
+  type      = "String"
+  value     = aws_subnet.private_app[0].id
+  
   tags = merge(
     var.common_tags,
     {
@@ -634,10 +634,10 @@ resource "aws_ssm_parameter" "private_subnet_id" {
 }
 
 resource "aws_ssm_parameter" "k8s_security_group_id" {
-  name  = "/clixx/k8s_security_group_id"
-  type  = "String"
-  value = aws_security_group.k8s_sg.id
-
+  name      = "/clixx/k8s_security_group_id"
+  type      = "String"
+  value     = aws_security_group.k8s_sg.id
+  
   tags = merge(
     var.common_tags,
     {

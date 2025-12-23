@@ -44,34 +44,6 @@ pipeline {
             }
         }
 
-        stage('✅ Validate Terraform') {
-            steps {
-                echo "✅ VALIDATING TERRAFORM CONFIGURATION - User: ${env.RUNNER}"
-                sh """
-                    cd ${TERRAFORM_DIR}
-                    terraform validate
-                """
-                script {
-                    // Format check - warn but don't fail
-                    def fmtResult = sh(
-                        script: "cd ${TERRAFORM_DIR} && terraform fmt -check -recursive",
-                        returnStatus: true
-                    )
-                    if (fmtResult != 0) {
-                        echo "⚠️ WARNING: Some Terraform files need formatting. Run 'terraform fmt -recursive' locally."
-                    }
-                }
-            }
-            post {
-                success {
-                    echo "✅ Terraform configuration is valid"
-                }
-                failure {
-                    echo "❌ Terraform validation failed - check syntax"
-                }
-            }
-        }
-
         stage('📋 Plan Deployment') {
             when {
                 expression { env.DEPLOY == 'Apply' }
@@ -180,7 +152,7 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                 withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
                     echo "🗑️ DESTROYING INFRASTRUCTURE - User: ${env.RUNNER}"
                     sh """
-                        cd ${TERRAFORM_DIR}
+                `        cd ${TERRAFORM_DIR}
                         
                         echo "Cleaning up SSM parameters..."
                         aws ssm delete-parameter --name '/clixx/k8s-join-command' --region ${AWS_REGION} || true

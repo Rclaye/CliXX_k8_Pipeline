@@ -23,5 +23,5 @@ provider "aws" {
 # This will be used for inspector.tf and inspector_iam_policy.tf
 provider "aws" {
   alias  = "automation"
-  region = "us-east-1"
+  region = "us-east-1" 
 }

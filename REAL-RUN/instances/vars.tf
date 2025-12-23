@@ -12,9 +12,9 @@ variable "environment" {
 variable "common_tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)
-  default = {
-    Project   = "Clixx Retail"
-    ManagedBy = "Terraform"
+  default     = {
+    Project     = "Clixx Retail"
+    ManagedBy   = "Terraform"
   }
 }
 
@@ -33,48 +33,48 @@ variable "availability_zones" {
 variable "public_subnet_cidrs" {
   description = "CIDR blocks for public subnets (450 hosts each)"
   type        = list(string)
-  default = [
-    "10.0.0.0/23", "10.0.2.0/23" # 512 IPs each - sufficient for 450+ hosts
+  default     = [
+    "10.0.0.0/23", "10.0.2.0/23"  # 512 IPs each - sufficient for 450+ hosts
   ]
 }
 
 variable "private_app_subnet_cidrs" {
   description = "CIDR blocks for private application subnets (250 hosts each)"
   type        = list(string)
-  default = [
-    "10.0.6.0/24", "10.0.7.0/24" # 256 IPs each - sufficient for 250+ hosts
+  default     = [
+    "10.0.6.0/24", "10.0.7.0/24"  # 256 IPs each - sufficient for 250+ hosts
   ]
 }
 
 variable "private_db_subnet_cidrs" {
   description = "CIDR blocks for private database subnets (680 hosts each)"
   type        = list(string)
-  default = [
-    "10.0.12.0/22", "10.0.16.0/22" # 1024 IPs each - sufficient for 680+ hosts
+  default     = [
+    "10.0.12.0/22", "10.0.16.0/22"  # 1024 IPs each - sufficient for 680+ hosts
   ]
 }
 
 variable "private_oracle_subnet_cidrs" {
   description = "CIDR blocks for private Oracle database subnets (254 hosts each)"
   type        = list(string)
-  default = [
-    "10.0.24.0/24", "10.0.25.0/24" # 256 IPs each - sufficient for 254 hosts
+  default     = [
+    "10.0.24.0/24", "10.0.25.0/24"  # 256 IPs each - sufficient for 254 hosts
   ]
 }
 
 variable "private_java_app_subnet_cidrs" {
   description = "CIDR blocks for private Java application subnets (50 hosts each)"
   type        = list(string)
-  default = [
-    "10.0.27.0/26", "10.0.27.64/26" # 64 IPs each - sufficient for 50 hosts
+  default     = [
+    "10.0.27.0/26", "10.0.27.64/26"  # 64 IPs each - sufficient for 50 hosts
   ]
 }
 
 variable "private_java_db_subnet_cidrs" {
   description = "CIDR blocks for private Java database subnets (50 hosts each)"
   type        = list(string)
-  default = [
-    "10.0.28.0/26", "10.0.28.64/26" # 64 IPs each - sufficient for 50 hosts
+  default     = [
+    "10.0.28.0/26", "10.0.28.64/26"  # 64 IPs each - sufficient for 50 hosts
   ]
 }
 
@@ -95,19 +95,19 @@ variable "bastion_instance_type" {
 variable "bastion_ami_id" {
   description = "AMI ID for the bastion host (defaults to ec2_ami if empty)"
   type        = string
-  default     = "ami-0ecb62995f68bb549" # Ubuntu AMI
+  default     = "ami-0ecb62995f68bb549"  # Ubuntu AMI
 }
 
 variable "bastion_key_name" {
   description = "Key pair name for the bastion host"
   type        = string
-  default     = "stack_devops_dev_kp" # Default to same as ec2_key_name
+  default     = "stack_devops_dev_kp"  # Default to same as ec2_key_name
 }
 
 variable "private_instance_ssh_key_destination_filename_on_bastion" {
   description = "Filename for the private instance SSH key on the bastion host"
   type        = string
-  default     = "myec2kp_priv.pem" # Updated to match terraform.tfvars
+  default     = "myec2kp_priv.pem"  # Updated to match terraform.tfvars
 }
 
 variable "bastion_ssh_key_path" {
@@ -125,7 +125,7 @@ variable "private_instance_ssh_key_path" {
 variable "bastion_allowed_cidrs" {
   description = "CIDR blocks allowed to connect to bastion via SSH"
   type        = list(string)
-  default     = ["0.0.0.0/0"] # Consider restricting for production
+  default     = ["0.0.0.0/0"]  # Consider restricting for production
 }
 
 # Security variables
@@ -138,7 +138,7 @@ variable "admin_ips" {
 variable "db_name" {
   description = "Name of the database"
   type        = string
-  default     = "wordpressdb" # Updated to match the Clixx application
+  default     = "wordpressdb"  # Updated to match the Clixx application
 }
 
 variable "db_user" {
@@ -161,7 +161,7 @@ variable "db_instance_class" {
 variable "db_snapshot_identifier" {
   description = "Snapshot identifier for RDS instance restoration"
   type        = string
-  default     = "" # Remove the hardcoded ARN to make it more configurable
+  default     = ""  # Remove the hardcoded ARN to make it more configurable
 }
 
 # EC2 variables
@@ -192,19 +192,19 @@ variable "ec2_ami" {
 variable "min_size" {
   description = "Minimum size for Auto Scaling Group"
   type        = number
-  default     = 1 # Updated default to 1 for cost savings
+  default     = 1  # Updated default to 1 for cost savings
 }
 
 variable "max_size" {
   description = "Maximum size for Auto Scaling Group"
   type        = number
-  default     = 2 # Updated default to 2 for cost savings
+  default     = 2  # Updated default to 2 for cost savings
 }
 
 variable "desired_capacity" {
   description = "Desired capacity for Auto Scaling Group"
   type        = number
-  default     = 1 # Updated default to 1 for cost savings
+  default     = 1  # Updated default to 1 for cost savings
 }
 
 # Domain and DNS variables
@@ -227,7 +227,7 @@ variable "certificate_domain" {
 variable "hosted_zone_name" {
   description = "Name of the Route 53 hosted zone"
   type        = string
-  default     = "stack-claye.com"
+  default     = "stack-claye.com" 
 }
 
 variable "create_existing_record" {
@@ -251,7 +251,7 @@ variable "hosted_zone_record_name" {
 variable "create_dns_record" {
   description = "Whether to create a DNS record"
   type        = bool
-  default     = true # Updated default to true
+  default     = true  # Updated default to true
 }
 
 # WordPress Admin variables
@@ -315,7 +315,7 @@ variable "k8s_worker_instance_type" {
 variable "k8s_ami_id" {
   description = "Ubuntu 22.04 or 24.04 AMI ID for K8s nodes"
   type        = string
-  default     = "ami-0ecb62995f68bb549" # Ubuntu AMI
+  default     = "ami-0ecb62995f68bb549"  # Ubuntu AMI
 }
 
 variable "k8s_worker_count" {

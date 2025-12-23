@@ -5,10 +5,10 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
 
   tags = {
-    Name         = "clixx-vpc"
-    Environment  = var.environment
-    Terraform    = "true"
-    Architecture = "12-subnet design"
+    Name        = "clixx-vpc"
+    Environment = var.environment
+    Terraform   = "true"
+    Architecture = "12-subnet design" 
   }
 }
 
@@ -123,8 +123,8 @@ resource "aws_internet_gateway" "igw" {
 
 # Elastic IPs for NAT Gateways - one per AZ for high availability
 resource "aws_eip" "nat" {
-  count = length(var.availability_zones)
-
+  count  = length(var.availability_zones)
+  
   tags = merge(var.common_tags, {
     Name        = "clixx-nat-eip-${count.index + 1}"
     Environment = var.environment

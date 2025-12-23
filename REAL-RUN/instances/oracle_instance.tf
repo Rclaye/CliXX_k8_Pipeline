@@ -66,7 +66,7 @@ resource "aws_iam_role_policy_attachment" "oracle_ssm_policy" {
 # Add SSM parameter access to Oracle instance role
 resource "aws_iam_role_policy_attachment" "oracle_ssm_param_policy" {
   role       = aws_iam_role.oracle_instance_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess" # Allows reading SSM parameters
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess"  # Allows reading SSM parameters
 }
 
 # Instance profile for the Oracle instance
@@ -77,7 +77,7 @@ resource "aws_iam_instance_profile" "oracle_instance_profile" {
 
 # Oracle EC2 instance
 resource "aws_instance" "oracle_db_instance" {
-  count                  = 0 # Set to until further notice
+  count                  = 0  # Set to until further notice
   ami                    = var.bastion_ami_id
   instance_type          = "t2.large"
   subnet_id              = length(aws_subnet.private_oracle) > 0 ? aws_subnet.private_oracle[0].id : null
@@ -103,7 +103,7 @@ resource "aws_instance" "oracle_db_instance" {
     throughput            = 500
     delete_on_termination = false
     encrypted             = true
-
+    
     tags = merge(var.common_tags, {
       Name = "oracle-data-volume"
     })
