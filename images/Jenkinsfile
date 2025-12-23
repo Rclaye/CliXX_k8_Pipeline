@@ -1,21 +1,6 @@
 pipeline {
     agent any
 
-    // ✅ QUICK WIN: Move input to parameters block
-    // This allows the pipeline to be triggered automatically by Git webhooks
-    parameters {
-        string(
-            name: 'RUNNER',
-            defaultValue: 'RCLAYE',
-            description: 'Identify who triggered this build'
-        )
-        choice(
-            name: 'DEPLOY',
-            choices: ['Apply', 'Destroy'],
-            description: 'Choose Apply to deploy or Destroy to tear down'
-        )
-    }
-
     environment {
         PATH = "${PATH}:${getTerraformPath()}"
         VERSION = "1.0.${BUILD_NUMBER}"
@@ -26,15 +11,32 @@ pipeline {
     stages {
         stage('🎬 Initialize Deployment') {
             steps {
-                // ✅ No more waiting! Parameters are already set
-                echo "Pipeline initialized by: ${params.RUNNER}"
-                echo "Action: ${params.DEPLOY}"
+                script {
+                    def userInput = input(
+                        id: 'InitParams',
+                        message: 'Kubernetes Pipeline Parameters',
+                        parameters: [
+                            [$class: 'StringParameterDefinition',
+                             name: 'RUNNER',
+                             defaultValue: 'RCLAYE',
+                             description: 'Identify the runner'],
+                            [$class: 'ChoiceParameterDefinition',
+                             name: 'DEPLOY',
+                             choices: "Apply\nDestroy",
+                             description: 'Choose Apply or Destroy']
+                        ]
+                    )
+                    env.RUNNER = userInput['RUNNER']
+                    env.DEPLOY = userInput['DEPLOY']
+                }
+                echo "Pipeline initialized by: ${env.RUNNER}"
+                echo "Action: ${env.DEPLOY}"
             }
         }
 
         stage('🔧 Prepare Infrastructure') {
             steps {
-                echo "🔧 INFRASTRUCTURE PREPARATION - User: ${params.RUNNER}"
+                echo "🔧 INFRASTRUCTURE PREPARATION - User: ${env.RUNNER}"
                 sh """
                     cd ${TERRAFORM_DIR}
                     terraform init -migrate-state
@@ -44,7 +46,7 @@ pipeline {
 
         stage('✅ Validate Terraform') {
             steps {
-                echo "✅ VALIDATING TERRAFORM CONFIGURATION - User: ${params.RUNNER}"
+                echo "✅ VALIDATING TERRAFORM CONFIGURATION - User: ${env.RUNNER}"
                 sh """
                     cd ${TERRAFORM_DIR}
                     terraform validate
@@ -63,11 +65,11 @@ pipeline {
 
         stage('📋 Plan Deployment') {
             when {
-                expression { params.DEPLOY == 'Apply' }
+                expression { env.DEPLOY == 'Apply' }
             }
             steps {
                 withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
-                    echo "📋 DEPLOYMENT PLANNING - User: ${params.RUNNER}"
+                    echo "📋 DEPLOYMENT PLANNING - User: ${env.RUNNER}"
                     sh """
                         cd ${TERRAFORM_DIR}
                         terraform plan \
@@ -77,21 +79,15 @@ pipeline {
                     """
                 }
             }
-            // ✅ QUICK WIN: Save the plan for audit trail
-            post {
-                success {
-                    archiveArtifacts artifacts: "${TERRAFORM_DIR}/tfplan", allowEmptyArchive: true
-                }
-            }
         }
 
         stage('🚀 Deploy Infrastructure') {
             when {
-                expression { params.DEPLOY == 'Apply' }
+                expression { env.DEPLOY == 'Apply' }
             }
             steps {
                 withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
-                    echo "🚀 DEPLOYING K8S INFRASTRUCTURE - User: ${params.RUNNER}"
+                    echo "🚀 DEPLOYING K8S INFRASTRUCTURE - User: ${env.RUNNER}"
                     sh """
                         cd ${TERRAFORM_DIR}
                         terraform apply -input=false tfplan
@@ -102,13 +98,13 @@ pipeline {
                 success {
                     echo """✅ TERRAFORM APPLY SUCCESS
 Infrastructure deployed! Waiting for K8s cluster to initialize...
-User: ${params.RUNNER}
+User: ${env.RUNNER}
 Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                 }
                 failure {
                     echo """❌ TERRAFORM APPLY FAILED
 Infrastructure deployment failed.
-User: ${params.RUNNER}
+User: ${env.RUNNER}
 Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                 }
             }
@@ -116,7 +112,7 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
 
         stage('🎉 Deployment Complete') {
             when {
-                expression { params.DEPLOY == 'Apply' }
+                expression { env.DEPLOY == 'Apply' }
             }
             steps {
                 script {
@@ -148,7 +144,7 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
 📊 Grafana URL: ${grafanaUrl} (admin/admin123)
 🔑 Bastion IP: ${bastionIp}
 🖥️  Master IP: ${masterIp}
-👤 Deployed by: ${params.RUNNER}
+👤 Deployed by: ${env.RUNNER}
 
 ⏳ NOTE: K8s cluster is still initializing (~15-20 min)
    Monitor progress:
@@ -162,10 +158,9 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
 
         stage('🗑️ Destroy Infrastructure') {
             when {
-                expression { params.DEPLOY == 'Destroy' }
+                expression { env.DEPLOY == 'Destroy' }
             }
             steps {
-                // ✅ Keep confirmation for destroy - this is good practice!
                 script {
                     input(
                         id: 'destroy_confirm',
@@ -174,7 +169,7 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
                     )
                 }
                 withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
-                    echo "🗑️ DESTROYING INFRASTRUCTURE - User: ${params.RUNNER}"
+                    echo "🗑️ DESTROYING INFRASTRUCTURE - User: ${env.RUNNER}"
                     sh """
                         cd ${TERRAFORM_DIR}
                         
@@ -200,8 +195,57 @@ Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"""
     }
 
     post {
-        always {
-            echo "Pipeline completed. Result: ${currentBuild.currentResult}"
+        cleanup {
+            script {
+                def destroyInfra = false
+
+                if (currentBuild.currentResult == 'SUCCESS' && env.DEPLOY == 'Apply') {
+                    try {
+                        input(
+                            id: 'destroy_confirm',
+                            message: "🎉 Deployment successful! Destroy environment?",
+                            parameters: [
+                                [$class: 'BooleanParameterDefinition', 
+                                 defaultValue: false, 
+                                 description: 'Run terraform destroy?', 
+                                 name: 'confirm']
+                            ]
+                        )
+                        destroyInfra = true
+                        echo "🗑️ DESTROY APPROVED by ${env.RUNNER}"
+                    } catch(err) {
+                        destroyInfra = false
+                        echo "✅ Infrastructure remains deployed"
+                    }
+                } else if (currentBuild.currentResult == 'FAILURE') {
+                    destroyInfra = true
+                    echo "⚠️ PIPELINE FAILED - Auto cleanup triggered"
+                }
+
+                if (destroyInfra) {
+                    echo "🧹 Proceeding with Infrastructure Cleanup..."
+                    withCredentials([file(credentialsId: 'k8-clixxx', variable: 'TFVARS_FILE')]) {
+                        try {
+                            sh """
+                                set -e
+                                cd ${TERRAFORM_DIR}
+                                
+                                echo "Cleaning up SSM parameters..."
+                                aws ssm delete-parameter --name '/clixx/k8s-join-command' --region ${AWS_REGION} 2>/dev/null || true
+                                
+                                echo "Running infrastructure destroy..."
+                                terraform destroy \
+                                  -var-file="\$TFVARS_FILE" \
+                                  -auto-approve
+                            """
+                            echo "✅ INFRASTRUCTURE DESTROYED SUCCESSFULLY"
+                        } catch (e) {
+                            echo "❌ DESTROY FAILED - Manual cleanup required"
+                            throw e
+                        }
+                    }
+                }
+            }
         }
     }
 }

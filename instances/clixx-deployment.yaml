@@ -14,13 +14,41 @@ spec:
       labels:
         app: clixx-web-app
     spec:
-      # Required for pulling private ECR image via token we created
       imagePullSecrets:
       - name: ecr-registry-secret
       containers:
       - name: clixx-web-app
-        # Use your actual ECR repository URL and specific tag
         image: 924305315126.dkr.ecr.us-east-1.amazonaws.com/clixx-repository2:clixx-image-1.0.42
         imagePullPolicy: Always
         ports:
         - containerPort: 80
+        
+        # ✅ QUICK WIN: Add resource limits
+        # Prevents one pod from consuming all node resources
+        resources:
+          requests:
+            cpu: "100m"      # Minimum CPU (0.1 cores)
+            memory: "128Mi"  # Minimum memory
+          limits:
+            cpu: "500m"      # Maximum CPU (0.5 cores)
+            memory: "512Mi"  # Maximum memory
+        
+        # ✅ QUICK WIN: Readiness probe
+        # K8s won't send traffic until this passes
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
+        
+        # ✅ QUICK WIN: Liveness probe  
+        # K8s restarts pod if this fails
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
