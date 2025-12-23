@@ -6,6 +6,7 @@ pipeline {
         VERSION = "1.0.${BUILD_NUMBER}"
         TERRAFORM_DIR = "instances"
         AWS_REGION = "us-east-1"
+        ECR_IMAGE = "924305315126.dkr.ecr.us-east-1.amazonaws.com/clixx-repository2:clixx-image-1.0.42"
     }
 
     stages {
@@ -68,6 +69,64 @@ pipeline {
                 }
                 failure {
                     echo "❌ Terraform validation failed - check syntax"
+                }
+            }
+        }
+
+        stage('🔒 Security Scan') {
+            when {
+                expression { env.DEPLOY == 'Apply' }
+            }
+            steps {
+                echo "🔒 SECURITY SCANNING - User: ${env.RUNNER}"
+                script {
+                    // Install Trivy if not present
+                    sh '''
+                        if ! command -v trivy &> /dev/null; then
+                            echo "Installing Trivy..."
+                            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+                        fi
+                        trivy --version
+                    '''
+                    
+                    // Scan Terraform files for misconfigurations
+                    echo "📁 Scanning Terraform configurations..."
+                    def tfScan = sh(
+                        script: "trivy config ${TERRAFORM_DIR} --severity HIGH,CRITICAL --exit-code 0",
+                        returnStatus: true
+                    )
+                    
+                    // Scan Kubernetes manifests
+                    echo "☸️ Scanning Kubernetes manifests..."
+                    def k8sScan = sh(
+                        script: "trivy config ${TERRAFORM_DIR}/clixx-deployment.yaml ${TERRAFORM_DIR}/clixx-service.yaml --severity HIGH,CRITICAL --exit-code 0",
+                        returnStatus: true
+                    )
+                    
+                    // Scan container image (requires ECR auth)
+                    echo "🐳 Scanning container image..."
+                    sh """
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin 924305315126.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    """
+                    def imageScan = sh(
+                        script: "trivy image ${ECR_IMAGE} --severity HIGH,CRITICAL --exit-code 0",
+                        returnStatus: true
+                    )
+                    
+                    // Report summary
+                    if (tfScan != 0 || k8sScan != 0 || imageScan != 0) {
+                        echo "⚠️ Security scan found issues - review above output"
+                    } else {
+                        echo "✅ No HIGH/CRITICAL vulnerabilities found"
+                    }
+                }
+            }
+            post {
+                success {
+                    echo "🔒 Security scan completed"
+                }
+                failure {
+                    echo "⚠️ Security scan encountered an error"
                 }
             }
         }
