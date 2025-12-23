@@ -80,26 +80,27 @@ pipeline {
             steps {
                 echo "🔒 SECURITY SCANNING - User: ${env.RUNNER}"
                 script {
-                    // Install Trivy if not present
+                    // Install Trivy to workspace bin directory (no sudo needed)
                     sh '''
-                        if ! command -v trivy &> /dev/null; then
-                            echo "Installing Trivy..."
-                            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+                        mkdir -p ./bin
+                        if [ ! -f ./bin/trivy ]; then
+                            echo "Installing Trivy to workspace..."
+                            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ./bin
                         fi
-                        trivy --version
+                        ./bin/trivy --version
                     '''
                     
                     // Scan Terraform files for misconfigurations
                     echo "📁 Scanning Terraform configurations..."
                     def tfScan = sh(
-                        script: "trivy config ${TERRAFORM_DIR} --severity HIGH,CRITICAL --exit-code 0",
+                        script: "./bin/trivy config ${TERRAFORM_DIR} --severity HIGH,CRITICAL --exit-code 0",
                         returnStatus: true
                     )
                     
                     // Scan Kubernetes manifests
                     echo "☸️ Scanning Kubernetes manifests..."
                     def k8sScan = sh(
-                        script: "trivy config ${TERRAFORM_DIR}/clixx-deployment.yaml ${TERRAFORM_DIR}/clixx-service.yaml --severity HIGH,CRITICAL --exit-code 0",
+                        script: "./bin/trivy config ${TERRAFORM_DIR}/clixx-deployment.yaml ${TERRAFORM_DIR}/clixx-service.yaml --severity HIGH,CRITICAL --exit-code 0",
                         returnStatus: true
                     )
                     
@@ -109,7 +110,7 @@ pipeline {
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin 924305315126.dkr.ecr.${AWS_REGION}.amazonaws.com
                     """
                     def imageScan = sh(
-                        script: "trivy image ${ECR_IMAGE} --severity HIGH,CRITICAL --exit-code 0",
+                        script: "./bin/trivy image ${ECR_IMAGE} --severity HIGH,CRITICAL --exit-code 0",
                         returnStatus: true
                     )
                     
