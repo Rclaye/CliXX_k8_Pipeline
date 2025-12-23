@@ -1,9 +1,0 @@
-# .gitignore
-*.tfstate
-*.tfstate.*
-.terraform/
-.terraform.lock.hcl
-terraform.tfvars
-*.pem
-*.key
-.DS_Store
