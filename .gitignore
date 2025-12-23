@@ -1,0 +1,28 @@
+# Ignore REAL-RUN directory
+REAL-RUN/
+
+# macOS
+.DS_Store
+*.DS_Store
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfvars
+!terraform.tfvars.example
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terraform plan files
+tfplan
+*.tfplan
+
+# SSH keys
+*.pem
+*.key
+!*.pub
