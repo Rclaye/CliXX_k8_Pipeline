@@ -1,0 +1,89 @@
+# ========================================
+# TERRAFORM-DOCS CONFIGURATION
+# Auto-generate documentation
+# ========================================
+
+formatter: "markdown table"
+
+version: ">= 0.16.0"
+
+header-from: docs/header.md
+footer-from: docs/footer.md
+
+recursive:
+  enabled: false
+  path: modules
+
+sections:
+  hide: []
+  show: []
+
+content: |-
+  {{ .Header }}
+
+  ## Architecture Overview
+  
+  This Terraform configuration deploys a Kubernetes cluster on AWS with:
+  - VPC with public/private subnets across multiple AZs
+  - Self-managed Kubernetes cluster (Master + Workers)
+  - Application Load Balancer for ingress
+  - Bastion host for secure access
+  - Monitoring stack (Prometheus/Grafana)
+
+  ## Usage
+
+  ```hcl
+  # Initialize with environment-specific backend
+  terraform init -backend-config="key=<env>/terraform.tfstate"
+  
+  # Plan changes
+  terraform plan -var-file="environments/<env>.tfvars"
+  
+  # Apply changes
+  terraform apply -var-file="environments/<env>.tfvars"
+  ```
+
+  {{ .Requirements }}
+
+  {{ .Providers }}
+
+  {{ .Modules }}
+
+  {{ .Resources }}
+
+  {{ .Inputs }}
+
+  {{ .Outputs }}
+
+  {{ .Footer }}
+
+output:
+  file: "README.md"
+  mode: inject
+  template: |-
+    <!-- BEGIN_TF_DOCS -->
+    {{ .Content }}
+    <!-- END_TF_DOCS -->
+
+output-values:
+  enabled: false
+  from: ""
+
+sort:
+  enabled: true
+  by: name
+
+settings:
+  anchor: true
+  color: true
+  default: true
+  description: true
+  escape: true
+  hide-empty: false
+  html: true
+  indent: 2
+  lockfile: true
+  read-comments: true
+  required: true
+  sensitive: true
+  type: true

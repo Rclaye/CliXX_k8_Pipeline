@@ -1,0 +1,33 @@
+# ========================================
+# NETWORK POLICY
+# Restrict traffic to/from clixx pods
+# ========================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: clixx-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: clixx-web-app
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from the load balancer / NodePort
+    - ports:
+        - protocol: TCP
+          port: 80
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow HTTPS outbound (for external APIs if needed)
+    - ports:
+        - protocol: TCP
+          port: 443

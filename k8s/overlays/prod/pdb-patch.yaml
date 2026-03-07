@@ -1,0 +1,7 @@
+# Production - stricter PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: clixx-pdb
+spec:
+  minAvailable: 2

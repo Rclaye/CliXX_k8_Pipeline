@@ -1,0 +1,99 @@
+# ========================================
+# CLIXX WEB APPLICATION DEPLOYMENT
+# Base configuration - overridden per environment
+# ========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clixx-web-deployment
+  labels:
+    app: clixx-web-app
+    version: base
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: clixx-web-app
+  template:
+    metadata:
+      labels:
+        app: clixx-web-app
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "80"
+        prometheus.io/path: "/metrics"
+    spec:
+      imagePullSecrets:
+        - name: ecr-registry-secret
+      
+      securityContext:
+        runAsNonRoot: false
+        fsGroup: 1000
+      
+      containers:
+        - name: clixx-web-app
+          image: 924305315126.dkr.ecr.us-east-1.amazonaws.com/clixx-repository2:IMAGE_TAG
+          imagePullPolicy: Always
+          
+          ports:
+            - containerPort: 80
+              name: http
+              protocol: TCP
+          
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          
+          envFrom:
+            - configMapRef:
+                name: clixx-config
+          
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+      
+      terminationGracePeriodSeconds: 30
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: clixx-web-app
+                topologyKey: kubernetes.io/hostname

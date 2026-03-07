@@ -1,0 +1,30 @@
+# ========================================
+# STAGING ENVIRONMENT OVERLAY
+# ========================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: clixx-staging
+
+resources:
+  - ../../base
+
+nameSuffix: -staging
+
+commonLabels:
+  environment: staging
+
+images:
+  - name: 924305315126.dkr.ecr.us-east-1.amazonaws.com/clixx-repository2
+    newTag: staging-latest
+
+patches:
+  - path: deployment-patch.yaml
+  - path: hpa-patch.yaml
+
+configMapGenerator:
+  - name: clixx-config
+    behavior: merge
+    literals:
+      - LOG_LEVEL=info
+      - ENVIRONMENT=staging

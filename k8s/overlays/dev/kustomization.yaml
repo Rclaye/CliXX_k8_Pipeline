@@ -1,0 +1,32 @@
+# ========================================
+# DEV ENVIRONMENT OVERLAY
+# ========================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: clixx-dev
+
+resources:
+  - ../../base
+
+nameSuffix: -dev
+
+commonLabels:
+  environment: dev
+
+# Replace image tag for dev
+images:
+  - name: 924305315126.dkr.ecr.us-east-1.amazonaws.com/clixx-repository2
+    newTag: dev-latest
+
+# Dev-specific patches
+patches:
+  - path: deployment-patch.yaml
+  - path: hpa-patch.yaml
+
+configMapGenerator:
+  - name: clixx-config
+    behavior: merge
+    literals:
+      - LOG_LEVEL=debug
+      - ENVIRONMENT=dev

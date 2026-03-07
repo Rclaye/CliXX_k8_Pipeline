@@ -1,0 +1,47 @@
+# ========================================
+# COMMITIZEN CONFIGURATION
+# Enforce conventional commits
+# ========================================
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "1.0.0"
+tag_format = "v$version"
+version_files = [
+    "VERSION"
+]
+bump_message = "release: version $current_version → $new_version"
+
+[tool.commitizen.customize]
+message_template = "{{change_type}}{% if scope %}({{scope}}){% endif %}: {{message}}"
+example = "feat(k8s): add horizontal pod autoscaler"
+schema = "<type>(<scope>): <subject>"
+schema_pattern = "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\([a-z-]+\\))?:\\s.+$"
+bump_pattern = "^(feat|fix|refactor|perf)"
+bump_map = {"feat" = "MINOR", "fix" = "PATCH", "refactor" = "PATCH", "perf" = "PATCH"}
+change_type_order = ["feat", "fix", "refactor", "perf"]
+info_path = "cz_customize_info.txt"
+info = """
+Conventional Commits for CliXX K8s Pipeline
+
+Types:
+  feat:     A new feature
+  fix:      A bug fix
+  docs:     Documentation changes
+  style:    Code style changes (formatting, etc.)
+  refactor: Code refactoring
+  perf:     Performance improvements
+  test:     Adding/updating tests
+  build:    Build system changes
+  ci:       CI/CD pipeline changes
+  chore:    Maintenance tasks
+  revert:   Revert previous commit
+
+Scopes:
+  k8s:        Kubernetes manifests
+  terraform:  Infrastructure as Code
+  jenkins:    Pipeline configuration
+  monitoring: Prometheus/Grafana
+  security:   Security configurations
+  docs:       Documentation
+"""

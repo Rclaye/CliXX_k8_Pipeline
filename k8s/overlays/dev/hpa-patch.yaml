@@ -1,0 +1,8 @@
+# Dev environment - minimal scaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: clixx-hpa
+spec:
+  minReplicas: 1
+  maxReplicas: 3

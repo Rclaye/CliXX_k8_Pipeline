@@ -1,0 +1,34 @@
+# Production environment - full resources
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clixx-web-deployment
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: clixx-web-app
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 5
+      # Production requires multi-AZ spread
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: clixx-web-app
+              topologyKey: topology.kubernetes.io/zone

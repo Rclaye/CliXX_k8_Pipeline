@@ -1,0 +1,25 @@
+# ========================================
+# TFSEC CONFIGURATION
+# Security scanning for Terraform
+# ========================================
+
+# Minimum severity level to report (CRITICAL, HIGH, MEDIUM, LOW)
+minimum_severity: MEDIUM
+
+# Exclusions for known false positives or accepted risks
+exclude:
+  # Example: Exclude specific checks if needed
+  # - aws-vpc-no-public-egress-sgr  # Allow public egress for NAT
+
+# Custom check paths (if you have custom policies)
+# include:
+#   - ./security-policies/
+
+# Ignore specific resources (use sparingly)
+# ignore:
+#   - aws_security_group.example
+
+# Severity overrides
+severity_overrides:
+  # Example: Downgrade specific checks
+  # aws-ec2-enforce-http-token-imds: LOW

@@ -1,0 +1,18 @@
+# Dev environment - reduced resources
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clixx-web-deployment
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: clixx-web-app
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
